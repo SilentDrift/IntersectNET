@@ -1,117 +1,98 @@
 # IntersectNET: Traffic Flow? Managed
 
-IntersectNET models and optimizes urban traffic flow using the **Cell Transmission Model (CTM)** and a hybrid **Genetic Algorithm (GA)** combined with **Simulated Annealing (SA)**. The simulation focuses on improving traffic efficiency by managing vehicle movement on road networks (edges) and optimizing traffic signals at intersections (nodes) to minimize congestion and travel time.
+IntersectNET implements a traffic simulation and signal optimization model for a **four-street intersection**, where each street has two lanes: one inbound and one outbound. The project models traffic flow using macroscopic traffic flow equations, with specific focus on optimizing signal timings to minimize total travel time (TTT) across the network.
 
 ## Project Overview
 
-The project includes:
+The primary objective is to simulate traffic dynamics at an intersection, model vehicle flow, and optimize traffic signal timings to reduce congestion. The simulation incorporates **vehicle density, speed**, and **flow dynamics** across each lane and at the intersection, using **mathematical models** based on the conservation of mass and momentum principles. A **gradient descent-based optimization algorithm** is employed to adjust signal timings dynamically and improve traffic throughput.
 
-- **Traffic Simulation**:
-  - Simulates traffic flow using the **Cell Transmission Model (CTM)**.
-  - Models different vehicle types (cars, buses, trucks) with varying speeds and lengths, moving along roads with different densities.
+### 1. Mathematical Modeling
 
-- **Hybrid Optimization**:
-  - Optimizes traffic signal timings and flow between intersections using a hybrid **Genetic Algorithm (GA)** and **Simulated Annealing (SA)**.
-  - Minimizes total travel time and ensures flow stability across the network.
+The traffic flow is modeled using **macroscopic traffic flow models**. This involves the Payne-Whitham (PW) model, which combines both **first-order flow equations** and **second-order momentum equations** to capture vehicle behavior more realistically.
 
-- **Before and After Comparison**:
-  - Visualizes traffic flow, density, and travel time metrics before and after optimization.
+#### Lane Dynamics
 
-## Key Features
+Each lane follows a set of partial differential equations (PDEs) to represent the relationship between vehicle density, flow, and speed:
 
-- **Multi-Vehicle Simulation**: Models heterogeneous traffic, including cars, buses, and trucks, with varying behavior on roads.
-- **Dynamic Traffic Signal Control**: Optimizes traffic signal timings at intersections based on real-time traffic demand and queue lengths.
-- **Hybrid Optimization**: Uses both GA and SA to optimize traffic flow and minimize travel time across the network.
-- **Data Visualization**: Provides various plots showing vehicle density, flow, queue lengths, and travel time metrics.
-- **Before and After Analysis**: Compares traffic conditions before and after optimization to show improvements in traffic flow and reduction in congestion.
+1. **Continuity Equation (Conservation of Mass):**
 
-## Mathematical Modeling
+    $$
+    \frac{\partial \rho}{\partial t} + \frac{\partial (\rho v)}{\partial x} = 0
+    $$
+    
+   - \( \rho \): Vehicle density (vehicles/m)
+   - \( v \): Vehicle speed (m/s)
+   - \( x \): Position along the lane (m)
+   - \( t \): Time (s)
+   
+   This equation ensures that the number of vehicles entering a segment equals the number of vehicles exiting, adjusted by changes in density.
 
-### 1. **Cell Transmission Model (CTM)**
+2. **Momentum Equation (Conservation of Momentum):**
 
-The **Cell Transmission Model (CTM)** is used to simulate the movement of vehicles across roads, which are divided into discrete cells. Vehicle density and flow between cells are updated based on traffic conditions.
+    $$
+    \frac{\partial v}{\partial t} + v \frac{\partial v}{\partial x} = -\frac{1}{\rho} \frac{\partial p}{\partial x} + \frac{V_{\text{eq}}(\rho) - v}{\tau}
+    $$
+    
+   - \( V_{\text{eq}}(\rho) \): Equilibrium speed as a function of vehicle density
+   - \( p \): Traffic pressure \( p = k \rho^\gamma \)
+   - \( \tau \): Relaxation time (how fast vehicles adapt to changing conditions)
 
-**Key Components:**
-- **Cells**: Roads (edges) are divided into discrete segments (cells) with a fixed length (`Δx`).
-- **Density (`ρ`)**: The number of vehicles per meter in each cell.
-- **Flow (`q`)**: The number of vehicles moving between cells per time step.
-- **Free-Flow Speed (`v_f`)**: The speed at which vehicles can travel when traffic is uncongested.
-- **Congestion Wave Speed (`w`)**: The speed at which traffic jams propagate backward.
-- **Capacity (`C`)**: The maximum number of vehicles that can pass through a cell per time step.
+   The momentum equation allows vehicles to adjust their speed based on density and external forces, introducing a pressure-like effect.
 
-### CTM Equations:
+#### Intersection Dynamics
 
-#### **Sending Function (`S(i)`)**:
-
-$$
-S(i) = \min(v_{\text{free-flow}} \cdot \rho(i) \cdot \Delta t, C)
-$$
-
-#### **Receiving Function (`R(i)`)**:
+At intersections, the project uses **transition matrices** to direct traffic flow from inbound lanes to outbound lanes. Each transition matrix element \( T_{ij} \) defines the probability that vehicles from inbound lane \( i \) will move to outbound lane \( j \). The sum of transition probabilities for each inbound lane equals 1:
 
 $$
-R(i) = \min(w \cdot (\rho_{\text{max}} - \rho(i)) \cdot \Delta t, C)
+\sum_{j} T_{ij} = 1 \quad \forall i
 $$
 
-#### **Flow Between Cells (`q(i)`)**:
+Movements are categorized into:
+- **Straight**: From inbound to the same street's outbound lane.
+- **Left Turn**: Turning left to the adjacent street's outbound lane.
+- **Right Turn**: Turning right to the opposite street’s outbound lane.
+
+The flow \( M_{ij} \) for each movement from inbound lane \( i \) to outbound lane \( j \) is computed as:
 
 $$
-q(i) = \min(S(i), R(i+1))
+M_{ij} = T_{ij} \cdot q_i(t)
 $$
 
-#### **Density Update**:
+Where \( q_i(t) \) is the flow in the inbound lane \( i \).
+
+### 2. Optimization Approach
+
+To optimize the traffic signal timings at the intersection, the project uses a **gradient descent** method. The objective is to minimize the total travel time (TTT) across all lanes, defined as:
 
 $$
-\rho(i, t+\Delta t) = \rho(i, t) + \frac{q(i-1) - q(i)}{\Delta x}
+\text{TTT} = \sum_{\text{lanes}} \sum_{t=1}^{T} \rho(t) \cdot \Delta x
 $$
 
-### 2. **Intersection Signal Control**
+- \( \rho(t) \): Density of vehicles at time \( t \)
+- \( \Delta x \): Lane segment length
 
-Intersections are modeled as nodes where incoming and outgoing flows are managed by traffic signals. Traffic lights at intersections switch between red and green phases, controlling vehicle movements.
+#### Signal Phasing
 
-- **Signal Phases**: Intersections alternate between green and red phases, controlling the flow of vehicles.
-- **Queue Dynamics**: Vehicles waiting at intersections form queues when the inflow exceeds the available capacity.
-
-The queue length \( Q(t) \) at an intersection is updated as:
+Each traffic signal phase controls non-conflicting movements, such as allowing vehicles from specific streets to move straight or turn left/right. The duration of each signal phase (green time) is optimized to reduce congestion. The signal timing optimization process involves computing the gradient of TTT with respect to the green time \( G_p \) of each phase and updating the green times iteratively:
 
 $$
-Q(t+1) = Q(t) + \Delta t \cdot (q_{\text{in}} - q_{\text{out}})
+G_p^{(n+1)} = G_p^{(n)} - \alpha \frac{\partial \text{TTT}}{\partial G_p}
 $$
 
-### 3. **Hybrid Optimization (GA + SA)**
+Where \( \alpha \) is the learning rate, and \( \frac{\partial \text{TTT}}{\partial G_p} \) is the gradient of TTT with respect to the green time for phase \( p \).
 
-The hybrid optimization approach combines **Genetic Algorithms (GA)** and **Simulated Annealing (SA)** to find optimal traffic signal timings and flow control strategies at intersections.
+### 3. Results
 
-- **Genetic Algorithms (GA)**:
-  - **Selection**: Selects the best-performing solutions based on fitness.
-  - **Crossover**: Combines parts of two solutions to create offspring.
-  - **Mutation**: Introduces random changes to solutions to maintain diversity.
+The project produces several outputs to analyze traffic performance, including:
+- **Density and Speed Heatmaps**: Show how vehicle density and speed evolve over time and space along each lane.
+- **Flow Over Time**: Visualizes vehicle flow at the end of each lane over the entire simulation.
+- **Queue Lengths at Intersection**: Tracks queue lengths at each inbound lane, highlighting congestion points.
+- **Total Travel Time (TTT)**: Evaluates the overall performance of the traffic network.
 
-- **Simulated Annealing (SA)**:
-  - **Temperature Parameter (`T`)**: Controls the probability of accepting worse solutions as the algorithm explores the solution space.
-  - **Cooling Schedule**: Gradually reduces the temperature to fine-tune the optimization process.
+### 4. Conclusion
 
-#### **Objective Function**:
+The project demonstrates the use of macroscopic traffic models and signal optimization techniques to effectively manage traffic flow at a four-street intersection. Through dynamic adjustment of signal timings, the model reduces congestion and improves overall efficiency, as measured by a decrease in total travel time.
 
-The objective function aims to:
+---
 
-1. **Minimize Total Travel Time**:
-
-$$
-\text{Total Travel Time} = \sum_{\text{edges}} \text{travel time} \times \rho
-$$
-
-2. **Maximize Flow Stability**:
-
-$$
-\text{Flow Stability} = \sum_{\text{edges}} \text{stable flow}
-$$
-
-## Visualization
-
-The project provides comprehensive visualizations of traffic flow, density, and signal timings:
-
-- **Density Over Time**: Visualizes how traffic density changes over time across different road segments.
-- **Flow and Speed**: Shows the traffic flow and average speed at each time step.
-- **Queue Lengths**: Displays the queue lengths at intersections, providing insights into how congestion is managed.
-- **Before and After Comparison**: Compares traffic metrics before and after optimization to show improvements in flow and reduced travel times.
+This README provides an overview of the **mathematical models**, **traffic dynamics**, and **optimization techniques** used in the project, as well as the results achieved through simulation. For a deeper dive into the code, please see the full implementation in the provided files.
